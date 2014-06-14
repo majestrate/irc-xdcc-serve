@@ -8,6 +8,10 @@ commands:
 
 put files in $HOME/.xdcc
 
+requirements:
+
+    pip install --user irc
+
 usage:
 
     python bot.py --server irc.server.tld --chan \#channel
