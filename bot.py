@@ -11,7 +11,32 @@ import logging
 import re
 import struct
 import sys
+import traceback
 import os
+
+class DCC:
+
+    def __init__(self, conn, file, size):
+        self._dcc_timeout = 60
+        self._dcc = conn
+        self._dcc_counter = 0
+        self.filesize = size
+        self._file = file
+        self._dcc.execute_every(1, self._pump)
+
+    def end(self):
+        self._dcc.disconnect()
+        self._file.close()
+
+    def send(self):
+        self._dcc.send_bytes(self._file.read(1024))
+        self._dcc_counter = 0
+
+    def _pump(self):
+        if self._dcc_counter >= self._dcc_timeout:
+            self.end()
+        else:
+            self._dcc_counter += 1
 
 class ServBot(IRC):
     
@@ -24,8 +49,10 @@ class ServBot(IRC):
             os.mkdir(root)
         self._root = root
         self._sendq = []
+        self._active_dcc = {}
         self._dcc = None
         self._file = None
+        self._dcc_timeout = 0
         self._filesize = -1
         self.ircobj.execute_every(1, self._pump)
 
@@ -35,56 +62,55 @@ class ServBot(IRC):
 
                 nick, file = self._sendq.pop()
                 nick = nick.split('!')[0]
+                self._filesize = os.path.getsize(file)
                 self._log.info('sendfile: %s %s' % (nick, file))
-                size = os.path.getsize(file)
                 self._dcc = self.dcc_listen('raw')
-                self._file = open(file,'rb')
-                self._filesize = size
+                self._file = open(file, 'rb')
                 self.connection.ctcp('DCC', nick, 'SEND %s %s %d %d' % (os.path.basename(file), 
                                                                         ip_quad_to_numstr(self._dcc.localaddress), 
                                                                         self._dcc.localport,
-                                                                        size))
+                                                                        self._filesize))
+            if self._dcc_timeout >= 60:
+                self._dcc = None
+                self._dcc_timeout = 0
+            if self._dcc is not None:
+                self._dcc_timeout += 1
+    
+    def on_nicknameinuse(self, conn, event):
+        conn.nick(self.get_nickname()+'_')
+
     def on_dcc_connect(self, conn, event):
-        self._send_chunk()
+        if self._dcc is None:
+            self._log.info('dcc connect too late')
+
+        dcc = DCC(conn, self._file, self._filesize)
+        self._active_dcc[conn] = dcc
+        self._dcc = None
+        self._log.info('dcc connect')
+        dcc.send()
 
     def on_dcc_disconnect(self, conn, event):
-        self._file.close()
-        self._dcc.disconnect()
-        self._file = None
-        self._filesize = -1
-        self._dcc = None
-
-    
-    def _send_chunk(self):
-        data = self._file.read(1024)
-        self._dcc.send_bytes(data)
-        sent = len(data)
-
-    def on_dccmsg(self, connection, event):
+        if conn in self._active_dcc:
+            dcc = self._active_dcc[conn]
+            dcc.end()
+            self._active_dcc.pop(conn)
+            self._log.info('dcc disconnect')
+                  
+    def on_dccmsg(self, conn, event):
+        dcc = self._active_dcc[conn]
         acked = struct.unpack('!I', event.arguments[0])
-        if acked == self._filesize:
-            self._dcc.disconnect()
-            self._file.close()
-            self._file = None
-            self._filesize = -1
-            self._dcc = None
+        if acked == dcc.filesize:
+            dcc.end()
+            self._active_dcc.pop(conn)
         else:
-            self._log.info('acked: %d' % acked)
-            self._send_chunk()
+            dcc.send()
 
     def on_welcome(self, conn, event):
         self._log.info('connected')
         self.connection.join(self._chan)
 
-
-    def on_join(self, conn, event):
-        if event.target == self._chan:
-            self._log.info('joined channel')
-        else:
-            self._log.warning('joined unrequested channel: %s' % event.target)
-
-
     def on_disconnect(self, conn, event):
+        self._log.info('disconnected')
         conn.reconnect()
 
     def on_pubmsg(self, conn, event):
@@ -191,17 +217,19 @@ def main():
 
     bot = ServBot(args.chan, os.path.join(os.environ['HOME'], '.xdcc'))
     
-    try:
-        log.info('connecting to %s:%d' % (host, port))
-        bot.connect(host, port, 'xdccbot')
-    except Exception as e:
-        fatal(str(e))
-
-    log.info('starting')
-    try:
-        bot.start()
-    except:
-        bot.connection.disconnect('bai')
+    while True:
+        try:
+            log.info('connecting to %s:%d' % (host, port))
+            bot.connect(host, port, 'xdccbot')
+        except Exception as e:
+            fatal(str(e))
+            
+        log.info('starting')
+        try:
+            bot.manifold.process_forever()
+        except Exception as e:
+            bot.connection.disconnect('bai')
+            fatal(traceback.format_exc())
 
 
 if __name__ == '__main__':
