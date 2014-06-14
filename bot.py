@@ -20,6 +20,7 @@ class DCC:
         self._dcc_timeout = 60
         self._dcc = conn
         self._dcc_counter = 0
+        self.position = 0
         self.filesize = size
         self._file = file
         self._dcc.execute_every(1, self._pump)
@@ -29,8 +30,13 @@ class DCC:
         self._file.close()
 
     def send(self):
-        self._dcc.send_bytes(self._file.read(1024))
+        data = self._file.read(1024)
+        self._dcc.send_bytes(data)
+        self.position += len(data)
         self._dcc_counter = 0
+    
+    def seek(self, amount):
+        self._file.seek(amount)
 
     def _pump(self):
         if self._dcc_counter >= self._dcc_timeout:
@@ -77,7 +83,7 @@ class ServBot(IRC):
                 self._dcc_timeout += 1
     
     def on_nicknameinuse(self, conn, event):
-        conn.nick(self.get_nickname()+'_')
+        conn.nick(conn.get_nickname()+'_')
 
     def on_dcc_connect(self, conn, event):
         if self._dcc is None:
@@ -103,6 +109,8 @@ class ServBot(IRC):
             dcc.end()
             self._active_dcc.pop(conn)
         else:
+            if dcc.position == 0 and acked > 0:
+                dcc.seek(acked)
             dcc.send()
 
     def on_welcome(self, conn, event):
