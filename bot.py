@@ -60,6 +60,7 @@ class ServBot(IRC):
         self._file = None
         self._dcc_timeout = 0
         self._filesize = -1
+        self.prefix = '\\'
         self.ircobj.execute_every(1, self._pump)
 
     def _pump(self):
@@ -123,7 +124,7 @@ class ServBot(IRC):
 
     def on_pubmsg(self, conn, event):
         msg = ''.join(event.arguments)
-        if msg.startswith('\\'):
+        if msg.startswith(self.prefix):
             args = msg.split()
             cmd = args[0][1:]
             args = args[1:]
@@ -202,6 +203,7 @@ def main():
     ap.add_argument('--server', type=str, required=True)
     ap.add_argument('--chan', type=str, required=True)
     ap.add_argument('--debug', action='store_const', const=True, default=False)
+    ap.add_argument('--root', type=str, required=True)
 
     args = ap.parse_args()
     if args.debug:
@@ -223,7 +225,8 @@ def main():
     else:
         fatal('incorrect server format')
 
-    bot = ServBot(args.chan, os.path.join(os.environ['HOME'], '.xdcc'))
+    log.info('serving from %s' % args.root)
+    bot = ServBot(args.chan, args.root)
     
     while True:
         try:

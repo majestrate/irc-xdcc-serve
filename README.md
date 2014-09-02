@@ -6,16 +6,14 @@ commands:
     \regex
     \get
 
-put files in $HOME/.xdcc
-
 requirements:
 
     pip install --user irc
 
 usage:
 
-    python bot.py --server irc.server.tld --chan \#channel
+    python bot.py --server irc.server.tld --chan '#channel' --root /path/to/files/
 
 or
 
-    python bot.py --server irc.server.tld:6666 --chan \#channel
+    python bot.py --server irc.server.tld:6666 --chan '#channel' --root /path/to/files
