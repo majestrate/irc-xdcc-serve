@@ -208,7 +208,7 @@ def main():
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument('--server', type=str, required=True)
-    ad.add_argument('--bind', type=str, required=True)
+    ap.add_argument('--bind', type=str, required=True)
     ap.add_argument('--chan', type=str, required=True)
     ap.add_argument('--botname', type=str, required=True)
     ap.add_argument('--debug', action='store_const', const=True, default=False)
