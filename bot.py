@@ -6,7 +6,6 @@
 
 from irc.client import SimpleIRCClient as IRC
 from irc.client import ip_quad_to_numstr
-import irc.logging
 import logging
 import re
 import struct
@@ -47,7 +46,7 @@ class DCC:
 class ServBot(IRC):
     
     
-    def __init__(self, chan, root):
+    def __init__(self, chan, root, addr):
         self._log = logging.getLogger('ServBot-%s' % chan)
         IRC.__init__(self)
         self._chan = str(chan)
@@ -61,8 +60,12 @@ class ServBot(IRC):
         self._dcc_timeout = 0
         self._filesize = -1
         self.prefix = '\\'
-        self.ircobj.execute_every(1, self._pump)
+        self.reactor.execute_every(1, self._pump)
+        self._dcc_addr = addr
 
+    def on_ctcp(self, c, ev):
+        self._log.info("got ctcp from {}".format(ev.source))
+        
     def _pump(self):
         if self.connection.is_connected():
             if len(self._sendq) > 0 and self._dcc is None:
@@ -73,8 +76,9 @@ class ServBot(IRC):
                 self._log.info('sendfile: %s %s' % (nick, file))
                 self._dcc = self.dcc_listen('raw')
                 self._file = open(file, 'rb')
+                print (dir(self._dcc))
                 self.connection.ctcp('DCC', nick, 'SEND %s %s %d %d' % (os.path.basename(file), 
-                                                                        ip_quad_to_numstr(self._dcc.localaddress), 
+                                                                        ip_quad_to_numstr(self._dcc_addr), 
                                                                         self._dcc.localport,
                                                                         self._filesize))
             if self._dcc_timeout >= 60:
@@ -152,25 +156,28 @@ class ServBot(IRC):
         for root, dirs, files in os.walk(self._root):
             for file in files:
                 if check(file):
-                    found.append(file)
+                    found.append(os.path.join(root, file))
         ret = [ '%d matches' % len(found) ]
         
         for match in found[:5]:
-            size = os.path.getsize(os.path.join(self._root, match))
-            ret.append(match + ' - size: %dB' % size)
+            size = os.path.getsize(match)
+            ret.append(match.replace(self._root, "") + ' - size: %dB' % size)
         return ret
 
     def _do_dcc(self ,nick, file):
         self._sendq.append((nick, file))
         
     def cmd_help(self, nick, args):
-        return ['use \\regex , \\find and \\get', 'make sure to /quote dccallow +xdccbot']
+        return ['use {}regex , {}find and {}get'.format(self.prefix, self.prefix, self.prefix), 'make sure to /quote dccallow +xdccbot']
 
     def cmd_get(self, nick, args):
         file = ' '.join(args)
-        if os.sep in file:
-            return ['invalid filename']
+        if '..' in file:
+            return ['invalid file name']
+        if file[0] == '/':
+            file = file[1:]
         file = os.path.join(self._root, file)
+        print (file)
         if os.path.exists(file):
             self._do_dcc(nick, file)
             return ['your request has been queued']
@@ -201,7 +208,9 @@ def main():
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument('--server', type=str, required=True)
+    ad.add_argument('--bind', type=str, required=True)
     ap.add_argument('--chan', type=str, required=True)
+    ap.add_argument('--botname', type=str, required=True)
     ap.add_argument('--debug', action='store_const', const=True, default=False)
     ap.add_argument('--root', type=str, required=True)
 
@@ -225,19 +234,19 @@ def main():
     else:
         fatal('incorrect server format')
 
-    log.info('serving from %s' % args.root)
-    bot = ServBot(args.chan, args.root)
+    log.info('serving files in %s' % args.root)
+    bot = ServBot(args.chan, args.root, args.bind)
     
     while True:
         try:
             log.info('connecting to %s:%d' % (host, port))
-            bot.connect(host, port, 'xdccbot')
+            bot.connect(host, port, args.botname)
         except Exception as e:
             fatal(str(e))
             
         log.info('starting')
         try:
-            bot.manifold.process_forever()
+            bot.reactor.process_forever()
         except Exception as e:
             bot.connection.disconnect('bai')
             fatal(traceback.format_exc())
