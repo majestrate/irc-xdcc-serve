@@ -2,9 +2,10 @@ irc xdcc serve bot
 
 commands:
 
-    \list
+    \find
     \regex
     \get
+    \help
 
 requirements:
 
