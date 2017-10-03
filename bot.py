@@ -12,7 +12,6 @@ import struct
 import sys
 import traceback
 import os
-from twisted.internet import reactor
 class DCC:
 
     def __init__(self, conn, file, size):
