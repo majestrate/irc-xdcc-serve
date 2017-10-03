@@ -12,7 +12,7 @@ import struct
 import sys
 import traceback
 import os
-
+from twisted.internet import reactor
 class DCC:
 
     def __init__(self, conn, file, size):
@@ -33,7 +33,7 @@ class DCC:
         self._dcc.send_bytes(data)
         self.position += len(data)
         self._dcc_counter = 0
-    
+
     def seek(self, amount):
         self._file.seek(amount)
 
@@ -44,8 +44,8 @@ class DCC:
             self._dcc_counter += 1
 
 class ServBot(IRC):
-    
-    
+
+
     def __init__(self, chan, root, addr):
         self._log = logging.getLogger('ServBot-%s' % chan)
         IRC.__init__(self)
@@ -60,12 +60,11 @@ class ServBot(IRC):
         self._dcc_timeout = 0
         self._filesize = -1
         self.prefix = '\\'
-        self.reactor.execute_every(1, self._pump)
         self._dcc_addr = addr
 
     def on_ctcp(self, c, ev):
         self._log.info("got ctcp from {}".format(ev.source))
-        
+
     def _pump(self):
         if self.connection.is_connected():
             if len(self._sendq) > 0 and self._dcc is None:
@@ -77,8 +76,8 @@ class ServBot(IRC):
                 self._dcc = self.dcc_listen('raw')
                 self._file = open(file, 'rb')
                 print (dir(self._dcc))
-                self.connection.ctcp('DCC', nick, 'SEND %s %s %d %d' % (os.path.basename(file), 
-                                                                        ip_quad_to_numstr(self._dcc_addr), 
+                self.connection.ctcp('DCC', nick, 'SEND %s %s %d %d' % (os.path.basename(file),
+                                                                        ip_quad_to_numstr(self._dcc_addr),
                                                                         self._dcc.localport,
                                                                         self._filesize))
             if self._dcc_timeout >= 60:
@@ -86,7 +85,7 @@ class ServBot(IRC):
                 self._dcc_timeout = 0
             if self._dcc is not None:
                 self._dcc_timeout += 1
-    
+
     def on_nicknameinuse(self, conn, event):
         conn.nick(conn.get_nickname()+'_')
 
@@ -106,7 +105,7 @@ class ServBot(IRC):
             dcc.end()
             self._active_dcc.pop(conn)
             self._log.info('dcc disconnect')
-                  
+
     def on_dccmsg(self, conn, event):
         dcc = self._active_dcc[conn]
         acked = struct.unpack('!I', event.arguments[0])
@@ -158,7 +157,7 @@ class ServBot(IRC):
                 if check(file):
                     found.append(os.path.join(root, file))
         ret = [ '%d matches' % len(found) ]
-        
+
         for match in found[:5]:
             size = os.path.getsize(match)
             ret.append(match.replace(self._root, "") + ' - size: %dB' % size)
@@ -166,7 +165,7 @@ class ServBot(IRC):
 
     def _do_dcc(self ,nick, file):
         self._sendq.append((nick, file))
-        
+
     def cmd_help(self, nick, args):
         return ['use {}regex , {}find and {}get'.format(self.prefix, self.prefix, self.prefix), 'make sure to /quote dccallow +xdccbot']
 
@@ -183,7 +182,7 @@ class ServBot(IRC):
             return ['your request has been queued']
         else:
             return ['no such file']
-    
+
     def cmd_find(self, nick, args):
         search = ' '.join(args)
         self._log.info('checking %s for %s' % ( self._root, search))
@@ -200,7 +199,7 @@ class ServBot(IRC):
 
 def main():
     log = logging.getLogger('main')
-    
+
     def fatal(msg):
         log.error(msg)
         sys.exit(1)
@@ -221,7 +220,7 @@ def main():
         lvl = logging.INFO
 
     logging.basicConfig(level=lvl)
-    
+
     host, port = None, None
     serv = args.server.split(':')
     if len(serv) == 2:
@@ -236,14 +235,14 @@ def main():
 
     log.info('serving files in %s' % args.root)
     bot = ServBot(args.chan, args.root, args.bind)
-    
+
     while True:
         try:
             log.info('connecting to %s:%d' % (host, port))
             bot.connect(host, port, args.botname)
         except Exception as e:
             fatal(str(e))
-            
+
         log.info('starting')
         try:
             bot.reactor.process_forever()
