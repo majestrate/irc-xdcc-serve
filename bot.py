@@ -12,7 +12,7 @@ import struct
 import sys
 import traceback
 import os
-
+import socket
 class DCC:
 
     def __init__(self, conn, file, size):
@@ -32,7 +32,7 @@ class DCC:
         data = self._file.read(1024)
         self._dcc.send_bytes(data)
         self.position += len(data)
-        self._dcc_counter = 0
+        self._dcc_counter += 0
     
     def seek(self, amount):
         self._file.seek(amount)
@@ -75,7 +75,10 @@ class ServBot(IRC):
                 nick = nick.split('!')[0]
                 self._filesize = os.path.getsize(file)
                 self._log.info('sendfile: %s %s' % (nick, file))
-                self._dcc = self.dcc('raw').listen(('',self.port))#self.dcc_listen('raw')
+
+                self._dcc = self.dcc('raw').listen(('',self.port))
+                self._dcc.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                
                 self._file = open(file, 'rb')
                 print(self._dcc_addr)
                 print(self.port)
