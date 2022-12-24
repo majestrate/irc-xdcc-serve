@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python3.9
 #
 # irc xdcc serve bot
 #
@@ -22,7 +22,7 @@ class DCC:
         self.position = 0
         self.filesize = size
         self._file = file
-        self._dcc.execute_every(1, self._pump)
+        self._dcc.reactor.scheduler.execute_every(1, self._pump)
 
     def end(self):
         self._dcc.disconnect()
@@ -46,7 +46,7 @@ class DCC:
 class ServBot(IRC):
     
     
-    def __init__(self, chan, root, addr):
+    def __init__(self, chan, root, addr,port):
         self._log = logging.getLogger('ServBot-%s' % chan)
         IRC.__init__(self)
         self._chan = str(chan)
@@ -58,10 +58,11 @@ class ServBot(IRC):
         self._dcc = None
         self._file = None
         self._dcc_timeout = 0
+        self.reactor.scheduler.execute_every(1, self._pump)
         self._filesize = -1
         self.prefix = '\\'
-        self.reactor.execute_every(1, self._pump)
         self._dcc_addr = addr
+        self.port = port
 
     def on_ctcp(self, c, ev):
         self._log.info("got ctcp from {}".format(ev.source))
@@ -74,8 +75,10 @@ class ServBot(IRC):
                 nick = nick.split('!')[0]
                 self._filesize = os.path.getsize(file)
                 self._log.info('sendfile: %s %s' % (nick, file))
-                self._dcc = self.dcc_listen('raw')
+                self._dcc = self.dcc('raw').listen(('',self.port))#self.dcc_listen('raw')
                 self._file = open(file, 'rb')
+                print(self._dcc_addr)
+                print(self._dcc.localport)
                 print (dir(self._dcc))
                 self.connection.ctcp('DCC', nick, 'SEND %s %s %d %d' % (os.path.basename(file), 
                                                                         ip_quad_to_numstr(self._dcc_addr), 
@@ -108,6 +111,7 @@ class ServBot(IRC):
             self._log.info('dcc disconnect')
                   
     def on_dccmsg(self, conn, event):
+        self._log.info("got ctcp from {}".format(event.source))
         dcc = self._active_dcc[conn]
         acked = struct.unpack('!I', event.arguments[0])
         if acked == dcc.filesize:
@@ -126,15 +130,16 @@ class ServBot(IRC):
         self._log.info('disconnected')
         conn.reconnect()
 
-    def on_pubmsg(self, conn, event):
+    def on_privmsg(self, conn, event):
         msg = ''.join(event.arguments)
         if msg.startswith(self.prefix):
             args = msg.split()
             cmd = args[0][1:]
             args = args[1:]
+            print(cmd)
             result = self._do_cmd(event.source, cmd, args)
             for line in result:
-                conn.privmsg(event.target, line)
+                conn.privmsg(event.source.nick, line)
 
     def _do_cmd(self,nick, cmd, args):
         _cmd = 'cmd_' + cmd
@@ -208,7 +213,8 @@ def main():
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument('--server', type=str, required=True)
-    ap.add_argument('--bind', type=str, required=True)
+    ap.add_argument('--address', type=str, required=True)
+    ap.add_argument('--port', type=str, required=True)
     ap.add_argument('--chan', type=str, required=True)
     ap.add_argument('--botname', type=str, required=True)
     ap.add_argument('--debug', action='store_const', const=True, default=False)
@@ -235,7 +241,7 @@ def main():
         fatal('incorrect server format')
 
     log.info('serving files in %s' % args.root)
-    bot = ServBot(args.chan, args.root, args.bind)
+    bot = ServBot(args.chan, args.root, args.address,args.port)
     
     while True:
         try:
@@ -246,7 +252,7 @@ def main():
             
         log.info('starting')
         try:
-            bot.reactor.process_forever()
+            bot.start();
         except Exception as e:
             bot.connection.disconnect('bai')
             fatal(traceback.format_exc())
