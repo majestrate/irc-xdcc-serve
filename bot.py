@@ -111,7 +111,6 @@ class ServBot(IRC):
             self._log.info('dcc disconnect')
                   
     def on_dccmsg(self, conn, event):
-        self._log.info("got ctcp from {}".format(event.source))
         dcc = self._active_dcc[conn]
         acked = struct.unpack('!I', event.arguments[0])
         if acked == dcc.filesize:
