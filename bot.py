@@ -78,11 +78,11 @@ class ServBot(IRC):
                 self._dcc = self.dcc('raw').listen(('',self.port))#self.dcc_listen('raw')
                 self._file = open(file, 'rb')
                 print(self._dcc_addr)
-                print(self._dcc.localport)
+                print(self.port)
                 print (dir(self._dcc))
                 self.connection.ctcp('DCC', nick, 'SEND %s %s %d %d' % (os.path.basename(file), 
                                                                         ip_quad_to_numstr(self._dcc_addr), 
-                                                                        self._dcc.localport,
+                                                                        self.port,
                                                                         self._filesize))
             if self._dcc_timeout >= 60:
                 self._dcc = None
