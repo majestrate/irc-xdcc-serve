@@ -216,7 +216,7 @@ def main():
     ap.add_argument('--port', type=int, required=True)
     ap.add_argument('--chan', type=str, required=True)
     ap.add_argument('--botname', type=str, required=True)
-    ap.add_argument('--password', type=str, required='--password' in sys.argv)
+    ap.add_argument('--password', type=str, required='--sasl' in sys.argv)
     ap.add_argument('--sasl', type=str, required=False)
     ap.add_argument('--debug', action='store_const', const=True, default=False)
     ap.add_argument('--root', type=str, required=True)
