@@ -253,7 +253,7 @@ def main():
             
         log.info('starting')
         try:
-            bot.start();
+            bot.start()
         except Exception as e:
             bot.connection.disconnect('bai')
             fatal(traceback.format_exc())
