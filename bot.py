@@ -76,13 +76,8 @@ class ServBot(IRC):
                 self._filesize = os.path.getsize(file)
                 self._log.info('sendfile: %s %s' % (nick, file))
 
-                self._dcc = self.dcc('raw').listen(('',self.port))
-                self._dcc.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                
+                self._dcc = self.dcc('raw').listen(('',self.port)) 
                 self._file = open(file, 'rb')
-                print(self._dcc_addr)
-                print(self.port)
-                print (dir(self._dcc))
                 self.connection.ctcp('DCC', nick, 'SEND %s %s %d %d' % (os.path.basename(file), 
                                                                         ip_quad_to_numstr(self._dcc_addr), 
                                                                         self.port,
@@ -115,7 +110,10 @@ class ServBot(IRC):
                   
     def on_dccmsg(self, conn, event):
         dcc = self._active_dcc[conn]
-        acked = struct.unpack('!I', event.arguments[0])
+        if dcc.filesize > 0xffffffff:      
+         acked = struct.unpack('!Q', event.arguments[0]) #64
+        else:
+         acked = struct.unpack('!I', event.arguments[0]) #32
         if acked == dcc.filesize:
             dcc.end()
             self._active_dcc.pop(conn)
@@ -147,7 +145,6 @@ class ServBot(IRC):
         _cmd = 'cmd_' + cmd
         if hasattr(self, _cmd):
             try:
-                self._log.info(_cmd)
                 return getattr(self, _cmd)(nick, args)
             except Exception as e:
                 return ['error: %s' % e]
@@ -219,6 +216,8 @@ def main():
     ap.add_argument('--port', type=int, required=True)
     ap.add_argument('--chan', type=str, required=True)
     ap.add_argument('--botname', type=str, required=True)
+    ap.add_argument('--password', type=str, required='--password' in sys.argv)
+    ap.add_argument('--sasl', type=str, required=False)
     ap.add_argument('--debug', action='store_const', const=True, default=False)
     ap.add_argument('--root', type=str, required=True)
 
@@ -248,7 +247,7 @@ def main():
     while True:
         try:
             log.info('connecting to %s:%d' % (host, port))
-            bot.connect(host, port, args.botname)
+            bot.connect(host, port, args.botname,args.password,sasl_login=args.sasl)
         except Exception as e:
             fatal(str(e))
             
