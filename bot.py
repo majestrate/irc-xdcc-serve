@@ -32,7 +32,7 @@ class DCC:
         data = self._file.read(1024)
         self._dcc.send_bytes(data)
         self.position += len(data)
-        self._dcc_counter += 0
+        self._dcc_counter = 0
     
     def seek(self, amount):
         self._file.seek(amount)
